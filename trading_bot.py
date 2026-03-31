@@ -21,7 +21,7 @@ class TradingBot:
     try:
       stock = yf.Ticker(ticker)
       info = stock.info
-      hist = stock.history(period="3mo", interval="1d")
+      hist = stock.history(period="12mo", interval="1d")
     except Exception as e:
       print(f"Error fetching data for {ticker}: {e}")
       return None
