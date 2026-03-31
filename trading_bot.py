@@ -290,11 +290,12 @@ class TradingBot:
 
 
 if __name__ == "__main__":
-  WATCHLIST = ['FR0000120644', #Danone, XPAR BN
+  WATCHLIST = ['FR0000133308', #Orange, ORA
+               'FR0000120644', #Danone, XPAR BN
                'FR0010908533', #Edenred SE, XPAR
                'FR0000121667', #EssilorLuxottica, XPAR
                'FR0000120321', #L'Oréal, XPAR EL
-               'FR0000120578', #, Sanofi, XPAR OR
+               'FR0000120578', #Sanofi, XPAR OR
                'NL0014559478', #Technip Energies N.V. XPAR TE
                'FR0000120271' # TotalEnergies SE, XPAR TTE
               ]
