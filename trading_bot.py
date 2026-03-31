@@ -9,10 +9,11 @@ from matplotlib.widgets import Button
 
 class TradingBot:
 
-  def __init__(self, tickers, short_window, long_window):
-    self.tickers = tickers # ticker : stock'slabel 
+  def __init__(self, tickers, short_window, long_window, sma_windows=None):
+    self.tickers = tickers # ticker : stock'slabel
     self.short_window = short_window
     self.long_window = long_window
+    self.sma_windows = sma_windows if sma_windows else [short_window, long_window]
     self.positions = {ticker: 0 for ticker in self.tickers}
 
   def get_data(self, ticker):
@@ -178,10 +179,10 @@ class TradingBot:
         return None
       (info, df) = data
       df = df.copy()
-      df['SMA_Short'] = df['Close'].rolling(window=self.short_window).mean()
-      df['SMA_Long'] = df['Close'].rolling(window=self.long_window).mean()
+      for window in self.sma_windows:
+        df[f'SMA_{window}'] = df['Close'].rolling(window=window).mean()
       df['Signal'] = 0.0
-      df.loc[df['SMA_Short'] > df['SMA_Long'], 'Signal'] = 1.0
+      df.loc[df[f'SMA_{self.short_window}'] > df[f'SMA_{self.long_window}'], 'Signal'] = 1.0
       df['Position'] = df['Signal'].diff()
       company_name = info.get('longName', ticker)
       data_cache[ticker] = (company_name, df)
@@ -201,13 +202,13 @@ class TradingBot:
         return
       (company_name, df) = res
       ax.plot(df['Close'], label='Close Price', alpha=0.5)
-      ax.plot(df['SMA_Short'], label=f'SMA {self.short_window}', alpha=0.9)
-      ax.plot(df['SMA_Long'], label=f'SMA {self.long_window}', alpha=0.9)
+      for window in self.sma_windows:
+        ax.plot(df[f'SMA_{window}'], label=f'SMA {window}', alpha=0.9)
       ax.plot(df[df['Position'] == 1.0].index,
-              df['SMA_Short'][df['Position'] == 1.0],
+              df[f'SMA_{self.short_window}'][df['Position'] == 1.0],
               '^', markersize=8, color='g', label='Buy')
       ax.plot(df[df['Position'] == -1.0].index,
-              df['SMA_Short'][df['Position'] == -1.0],
+              df[f'SMA_{self.short_window}'][df['Position'] == -1.0],
               'v', markersize=8, color='r', label='Sell')
       ax.set_title(f"{company_name} ({ticker})")
       ax.legend(loc='upper left', fontsize='small')
@@ -245,7 +246,6 @@ class TradingBot:
 
 
   def run(self):
-
     try:
       while True:
         for ticker in self.tickers:
@@ -277,7 +277,7 @@ if __name__ == "__main__":
                'NL0014559478', #Technip Energies N.V. XPAR TE
                'FR0000120271' # TotalEnergies SE, XPAR TTE
               ]
-  bot = TradingBot(tickers=WATCHLIST, short_window=20, long_window=100)
+  bot = TradingBot(tickers=WATCHLIST, short_window=20, long_window=100, sma_windows=[10, 20, 50, 100, 200])
 
   # Uncomment to run the bot
   # bot.run()
