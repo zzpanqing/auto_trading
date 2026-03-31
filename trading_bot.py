@@ -4,9 +4,11 @@ from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.widgets import Button
 
 
 class TradingBot:
+
   def __init__(self, tickers, short_window, long_window):
     self.tickers = tickers # ticker : stock'slabel 
     self.short_window = short_window
@@ -162,20 +164,103 @@ class TradingBot:
     plt.tight_layout()
     plt.show()
 
+  def visualize_tickers_navigator(self):
+    data_cache = {}
+    idx = {'i': 0}
+    fig, ax = plt.subplots(figsize=(12, 6))
+    plt.subplots_adjust(bottom=0.2)
+
+    def compute_df(ticker):
+      if ticker in data_cache:
+        return data_cache[ticker]
+      data = self.get_data(ticker)
+      if data is None:
+        return None
+      (info, df) = data
+      df = df.copy()
+      df['SMA_Short'] = df['Close'].rolling(window=self.short_window).mean()
+      df['SMA_Long'] = df['Close'].rolling(window=self.long_window).mean()
+      df['Signal'] = 0.0
+      df.loc[df['SMA_Short'] > df['SMA_Long'], 'Signal'] = 1.0
+      df['Position'] = df['Signal'].diff()
+      company_name = info.get('longName', ticker)
+      data_cache[ticker] = (company_name, df)
+      return data_cache[ticker]
+
+    def update():
+      ax.clear()
+      if not self.tickers:
+        ax.set_title('No tickers provided')
+        fig.canvas.draw_idle()
+        return
+      ticker = self.tickers[idx['i']]
+      res = compute_df(ticker)
+      if res is None:
+        ax.set_title(f"{ticker} - data unavailable")
+        fig.canvas.draw_idle()
+        return
+      (company_name, df) = res
+      ax.plot(df['Close'], label='Close Price', alpha=0.5)
+      ax.plot(df['SMA_Short'], label=f'SMA {self.short_window}', alpha=0.9)
+      ax.plot(df['SMA_Long'], label=f'SMA {self.long_window}', alpha=0.9)
+      ax.plot(df[df['Position'] == 1.0].index,
+              df['SMA_Short'][df['Position'] == 1.0],
+              '^', markersize=8, color='g', label='Buy')
+      ax.plot(df[df['Position'] == -1.0].index,
+              df['SMA_Short'][df['Position'] == -1.0],
+              'v', markersize=8, color='r', label='Sell')
+      ax.set_title(f"{company_name} ({ticker})")
+      ax.legend(loc='upper left', fontsize='small')
+      ax.grid(True, alpha=0.3)
+      ax.tick_params(axis='x', rotation=45)
+      fig.canvas.draw_idle()
+
+    # Buttons
+    axprev = plt.axes([0.70, 0.02, 0.10, 0.05])
+    axnext = plt.axes([0.82, 0.02, 0.10, 0.05])
+    bprev = Button(axprev, 'Prev')
+    bnext = Button(axnext, 'Next')
+
+    def on_prev(event):
+      idx['i'] = (idx['i'] - 1) % len(self.tickers)
+      update()
+
+    def on_next(event):
+      idx['i'] = (idx['i'] + 1) % len(self.tickers)
+      update()
+
+    bprev.on_clicked(on_prev)
+    bnext.on_clicked(on_next)
+
+    # Keyboard shortcuts
+    def on_key(event):
+      if event.key in ('left', 'pageup'):
+        on_prev(event)
+      elif event.key in ('right', 'pagedown'):
+        on_next(event)
+    fig.canvas.mpl_connect('key_press_event', on_key)
+
+    update()
+    plt.show()
+
 
   def run(self):
+
     try:
       while True:
         for ticker in self.tickers:
-          (info, df) = self.get_data(ticker)
-          if df is not None:
-            current_price = df['Close'].iloc[-1]
-            signal = self.analyze_market(ticker, df)
-            company_name = info.get('longName', ticker)
-            if signal in ['BUY', 'SELL']:
-              self.execute_trade(ticker, company_name, signal, current_price)
-            else:
-              print(f"[{datetime.now().strftime('%H:%M:%S')}] {ticker} [{company_name}]: €{current_price:.2f} | Strategy: HOLD")
+          data = self.get_data(ticker)
+          if data is None:
+            continue
+          (info, df) = data
+          current_price = df['Close'].iloc[-1]
+          signal = self.analyze_market(ticker, df)
+          company_name = info.get('longName', ticker)
+          if signal in ['BUY', 'SELL']:
+            self.execute_trade(ticker, company_name, signal, current_price)
+          else:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] {ticker} [{company_name}]: €{current_price:.2f} | Strategy: HOLD")
+
         time.sleep(60)
     except KeyboardInterrupt:
       print("\nBot stopped by user.")
@@ -193,12 +278,23 @@ if __name__ == "__main__":
                'FR0000120271' # TotalEnergies SE, XPAR TTE
               ]
   bot = TradingBot(tickers=WATCHLIST, short_window=20, long_window=100)
-  bot.run()
+
+  # Uncomment to run the bot
+  # bot.run()
   
   # Test collecting data for the first stock
   # data = bot.get_data(WATCHLIST[0])
   # print(data)
 
   bot.get_company_news(WATCHLIST[0])
-  for ticker in WATCHLIST:
-    bot.visualize_strategy(ticker)
+
+  # Visualize all strategies in one figure
+  # bot.visualize_all_strategies()
+
+  # Optionally, you can still visualize individual stocks if needed
+  #for ticker in WATCHLIST:
+  #  bot.visualize_strategy(ticker)
+
+  # Visualize interactively: use Prev/Next buttons or Left/Right keys to switch tickers
+  bot.visualize_tickers_navigator()
+
