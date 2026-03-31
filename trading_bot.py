@@ -3,6 +3,7 @@ import time
 from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 class TradingBot:
@@ -97,6 +98,68 @@ class TradingBot:
     company_name = info.get('longName', ticker)
     plt.title(f"{company_name} - SMA Crossover")
     plt.legend()
+    plt.show()
+
+  def visualize_all_strategies(self):
+    """
+    Visualize all tickers' strategies in a grid layout
+    """
+    num_tickers = len(self.tickers)
+
+    # Calculate grid dimensions
+    cols = 2  # 2 columns
+    rows = (num_tickers + cols - 1) // cols  # Ceiling division
+
+    fig, axes = plt.subplots(rows, cols, figsize=(16, 4 * rows))
+    fig.suptitle('SMA Crossover Strategy - All Tickers', fontsize=16, y=0.98)
+
+    # Flatten axes array for easier indexing
+    if rows == 1 and cols == 1:
+        axes = np.array([axes])
+    axes = axes.flatten()
+
+    for idx, ticker in enumerate(self.tickers):
+        data = self.get_data(ticker)
+        if data is None:
+            continue
+
+        (info, df) = data
+        company_name = info.get('longName', ticker)
+
+        # Calculate SMAs
+        df['SMA_Short'] = df['Close'].rolling(window=self.short_window).mean()
+        df['SMA_Long'] = df['Close'].rolling(window=self.long_window).mean()
+
+        df['Signal'] = 0.0
+        df.loc[df['SMA_Short'] > df['SMA_Long'], 'Signal'] = 1.0
+        df['Position'] = df['Signal'].diff()
+
+        # Plot on subplot
+        ax = axes[idx]
+        ax.plot(df['Close'], label='Close Price', alpha=0.5)
+        ax.plot(df['SMA_Short'], label=f'SMA {self.short_window}', alpha=0.9)
+        ax.plot(df['SMA_Long'], label=f'SMA {self.long_window}', alpha=0.9)
+
+        # Plot Buy/Sell Signals
+        ax.plot(df[df['Position'] == 1.0].index,
+                df['SMA_Short'][df['Position'] == 1.0],
+                '^', markersize=8, color='g', label='Buy')
+        ax.plot(df[df['Position'] == -1.0].index,
+                df['SMA_Short'][df['Position'] == -1.0],
+                'v', markersize=8, color='r', label='Sell')
+
+        ax.set_title(f"{company_name} ({ticker})")
+        ax.legend(loc='upper left', fontsize='small')
+        ax.grid(True, alpha=0.3)
+
+        # Format x-axis dates
+        ax.tick_params(axis='x', rotation=45)
+
+    # Hide any unused subplots
+    for idx in range(num_tickers, len(axes)):
+        axes[idx].axis('off')
+
+    plt.tight_layout()
     plt.show()
 
 
