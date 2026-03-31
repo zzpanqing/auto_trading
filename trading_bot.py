@@ -171,6 +171,9 @@ class TradingBot:
     fig, ax = plt.subplots(figsize=(12, 6))
     plt.subplots_adjust(bottom=0.2)
 
+    # Track which SMA windows are visible
+    sma_visible = {window: True for window in self.sma_windows}
+
     def compute_df(ticker):
       if ticker in data_cache:
         return data_cache[ticker]
@@ -203,7 +206,8 @@ class TradingBot:
       (company_name, df) = res
       ax.plot(df['Close'], label='Close Price', alpha=0.5)
       for window in self.sma_windows:
-        ax.plot(df[f'SMA_{window}'], label=f'SMA {window}', alpha=0.9)
+        if sma_visible[window]:
+          ax.plot(df[f'SMA_{window}'], label=f'SMA {window}', alpha=0.9)
       ax.plot(df[df['Position'] == 1.0].index,
               df[f'SMA_{self.short_window}'][df['Position'] == 1.0],
               '^', markersize=8, color='g', label='Buy')
@@ -221,6 +225,23 @@ class TradingBot:
     axnext = plt.axes([0.82, 0.02, 0.10, 0.05])
     bprev = Button(axprev, 'Prev')
     bnext = Button(axnext, 'Next')
+
+    # Create toggle buttons for each SMA window
+    button_axes = []
+    toggle_buttons = []
+    for i, window in enumerate(self.sma_windows):
+      ax_button = plt.axes([0.10 + i*0.12, 0.02, 0.10, 0.05])
+      button_axes.append(ax_button)
+      btn = Button(ax_button, f'SMA {window}')
+      toggle_buttons.append(btn)
+      def make_toggle(window):
+        def toggle(event):
+          sma_visible[window] = not sma_visible[window]
+          btn.label.set_text(f"SMA {window} {'(off)' if not sma_visible[window] else ''}")
+          fig.canvas.draw_idle()
+          update()
+        return toggle
+      btn.on_clicked(make_toggle(window))
 
     def on_prev(event):
       idx['i'] = (idx['i'] - 1) % len(self.tickers)
