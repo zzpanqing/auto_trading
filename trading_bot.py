@@ -1,6 +1,9 @@
 import yfinance as yf
 import time
 from datetime import datetime
+import pandas as pd
+import matplotlib.pyplot as plt
+
 
 class TradingBot:
   def __init__(self, tickers, short_window, long_window):
@@ -41,12 +44,60 @@ class TradingBot:
       return 'SELL'
     return 'HOLD'
 
+  def get_company_news(self, ticker):
+    """
+    Fetches the latest news for a specific company.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        news_list = stock.news
+        
+        print(f"\n--- Latest News for {ticker} ---")
+        if news_list:
+            # Print the top 2 headlines
+            for item in news_list[:2]:
+                title = item.get('title', 'No Title')
+                link = item.get('link', 'No Link')
+                print(f"- {title}")
+                print(f"  Link: {link}")
+        else:
+            print("No recent news found.")
+        print("----------------------------------\n")
+    except Exception as e:
+        print(f"Could not fetch news for {ticker}: {e}")
+
   def execute_trade(self, ticker, company_name, action, price):
     print("ticker " + ticker)
     print("company_name " + company_name)
     print("action " + action)
     print("price €" + str(price))
 
+  def visualize_strategy(self, ticker):
+    data = self.get_data(ticker)
+    if data is None:
+      return
+    (info, df) = data
+
+    df['SMA_Short'] = df['Close'].rolling(window=self.short_window).mean()
+    df['SMA_Long'] = df['Close'].rolling(window=self.long_window).mean()
+
+    df['Signal'] = 0.0
+    df.loc[df['SMA_Short'] > df['SMA_Long'], 'Signal'] = 1.0
+    df['Position'] = df['Signal'].diff()
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(df['Close'], label='Close Price', alpha=0.5)
+    plt.plot(df['SMA_Short'], label=f'SMA {self.short_window}', alpha=0.9)
+    plt.plot(df['SMA_Long'], label=f'SMA {self.long_window}', alpha=0.9)
+
+    # Plot Buy/Sell Signals
+    plt.plot(df[df['Position'] == 1.0].index, df['SMA_Short'][df['Position'] == 1.0], '^', markersize=10, color='g', label='Buy Signal')
+    plt.plot(df[df['Position'] == -1.0].index, df['SMA_Short'][df['Position'] == -1.0], 'v', markersize=10, color='r', label='Sell Signal')
+
+    company_name = info.get('longName', ticker)
+    plt.title(f"{company_name} - SMA Crossover")
+    plt.legend()
+    plt.show()
 
 
   def run(self):
@@ -78,9 +129,13 @@ if __name__ == "__main__":
                'NL0014559478', #Technip Energies N.V. XPAR TE
                'FR0000120271' # TotalEnergies SE, XPAR TTE
               ]
-  bot = TradingBot(tickers=WATCHLIST, short_window=5, long_window=10)
+  bot = TradingBot(tickers=WATCHLIST, short_window=20, long_window=100)
   bot.run()
   
   # Test collecting data for the first stock
   # data = bot.get_data(WATCHLIST[0])
   # print(data)
+
+  bot.get_company_news(WATCHLIST[0])
+  for ticker in WATCHLIST:
+    bot.visualize_strategy(ticker)
