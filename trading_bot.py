@@ -234,14 +234,14 @@ class TradingBot:
       button_axes.append(ax_button)
       btn = Button(ax_button, f'SMA {window}')
       toggle_buttons.append(btn)
-      def make_toggle(window):
-        def toggle(event):
-          sma_visible[window] = not sma_visible[window]
-          btn.label.set_text(f"SMA {window} {'(off)' if not sma_visible[window] else ''}")
+      def make_toggle(button, win):
+        def toggle(event,b=button, w=win):
+          sma_visible[w] = not sma_visible[w]
+          b.label.set_text(f"SMA {w} {'(off)' if not sma_visible[w] else ''}")
           fig.canvas.draw_idle()
           update()
         return toggle
-      btn.on_clicked(make_toggle(window))
+      btn.on_clicked(make_toggle(btn, window))
 
     def on_prev(event):
       idx['i'] = (idx['i'] - 1) % len(self.tickers)
