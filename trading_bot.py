@@ -168,16 +168,16 @@ class TradingBot:
     plt.show()
 
   def visualize_tickers_navigator(self):
-    data_cache = {}
-    idx = {'i': 0}
-    fig, ax = plt.subplots(figsize=(12, 6))
-    plt.subplots_adjust(bottom=0.2)
-
-    # Track which SMA windows are visible
     # sma_visible = {window: True for window in self.sma_windows}
     # 仅 short_window 和 long_window 默认可见
     sma_visible = {w: (w in (self.short_window, self.long_window)) for w in self.sma_windows}
 
+    fig, ax = plt.subplots(figsize=(12, 6))
+    # 留出顶部空间给右上方的 Prev/Next 按钮，底部留出一行给 SMA toggle
+    plt.subplots_adjust(bottom=0.18, top=0.88)
+
+    data_cache = {}
+    idx = {'i': 0}
 
     # 固定你自己的颜色顺序（不经由 rcParams）
     base_colors = [
@@ -257,17 +257,22 @@ class TradingBot:
       ax.tick_params(axis='x', rotation=45)
       fig.canvas.draw_idle()
 
-    # Buttons
-    axprev = plt.axes([0.70, 0.02, 0.10, 0.05])
-    axnext = plt.axes([0.82, 0.02, 0.10, 0.05])
+
+
+
+
+    # Put Prev / Next at top-right
+    axprev = plt.axes([0.82, 0.91, 0.07, 0.04])   # left, bottom, width, height (figure coords)
+    axnext = plt.axes([0.91, 0.91, 0.07, 0.04])
     bprev = Button(axprev, 'Prev')
     bnext = Button(axnext, 'Next')
 
     # Create toggle buttons for each SMA window
     button_axes = []
     toggle_buttons = []
+    toggle_y = 0.02
     for i, window in enumerate(self.sma_windows):
-      ax_button = plt.axes([0.10 + i*0.12, 0.02, 0.10, 0.05])
+      ax_button = plt.axes([0.10 + i*0.12, toggle_y, 0.10, 0.05])
       button_axes.append(ax_button)
       # 按照可见性设定初始标签
       init_label = f"SMA {window}" + ("" if sma_visible[window] else " (off)")
@@ -338,7 +343,12 @@ if __name__ == "__main__":
                'NL0014559478', #Technip Energies N.V. XPAR TE
                'FR0000120271' # TotalEnergies SE, XPAR TTE
               ]
-  bot = TradingBot(tickers=WATCHLIST, short_window=50, long_window=200, sma_windows=[10, 20, 50, 100, 200])
+  bot = TradingBot(tickers=WATCHLIST, short_window=10, long_window=50, sma_windows=[5, 10, 20, 25, 50, 100, 200])
+  # ✔ “短周期 vs 长周期”的关系
+  # 你可以自己设计，比如：
+  # 快线 = 10天
+  # 慢线 = 5倍 → 50天
+  # 👉 这个“倍数关系”比具体数字更有意义
 
   # Uncomment to run the bot
   # bot.run()
@@ -358,4 +368,5 @@ if __name__ == "__main__":
 
   # Visualize interactively: use Prev/Next buttons or Left/Right keys to switch tickers
   bot.visualize_tickers_navigator()
+
 
