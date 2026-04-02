@@ -174,6 +174,13 @@ class TradingBot:
     # Track which SMA windows are visible
     sma_visible = {window: True for window in self.sma_windows}
 
+    # 固定你自己的颜色顺序（不经由 rcParams）
+    base_colors = [
+      'tab:orange','tab:green','tab:red','tab:purple','tab:brown',
+      'tab:pink','tab:gray','tab:olive','tab:cyan'
+    ]
+    win_colors = {w: base_colors[i % len(base_colors)] for i, w in enumerate(self.sma_windows)}
+
     def compute_df(ticker):
       if ticker in data_cache:
         return data_cache[ticker]
@@ -204,18 +211,43 @@ class TradingBot:
         fig.canvas.draw_idle()
         return
       (company_name, df) = res
-      ax.plot(df['Close'], label='Close Price', alpha=0.5)
+
+      # 固定收盘线颜色
+      close_line, = ax.plot(df['Close'], label='Close Price', alpha=0.5, linewidth=2.0, color='tab:blue')
+
+      # 先把所有 SMA 都画出来，并赋予固定颜色，再按可见性显示/隐藏
+      sma_lines = []
       for window in self.sma_windows:
-        if sma_visible[window]:
-          ax.plot(df[f'SMA_{window}'], label=f'SMA {window}', alpha=0.9)
-      ax.plot(df[df['Position'] == 1.0].index,
-              df[f'SMA_{self.short_window}'][df['Position'] == 1.0],
+        line, = ax.plot(
+          df[f'SMA_{window}'],
+          label=f'SMA {window}',
+          alpha=0.9,
+          linewidth=1.0,
+          color=win_colors[window]
+        )
+        line.set_visible(sma_visible[window])
+        sma_lines.append(line)
+
+      # Buy/Sell markers（颜色保持不变）
+      buy_mask = (df['Position'] == 1.0)
+      sell_mask = (df['Position'] == -1.0)
+      ax.plot(df[buy_mask].index,
+              df[f'SMA_{self.short_window}'][buy_mask],
               '^', markersize=8, color='g', label='Buy')
-      ax.plot(df[df['Position'] == -1.0].index,
-              df[f'SMA_{self.short_window}'][df['Position'] == -1.0],
+      ax.plot(df[sell_mask].index,
+              df[f'SMA_{self.short_window}'][sell_mask],
               'v', markersize=8, color='r', label='Sell')
+
       ax.set_title(f"{company_name} ({ticker})")
-      ax.legend(loc='upper left', fontsize='small')
+
+      # 只显示可见曲线对应的图例条目
+      handles, labels = ax.get_legend_handles_labels()
+      visible_pairs = [(h, l) for h, l in zip(handles, labels) if getattr(h, 'get_visible', lambda: True)()]
+      if visible_pairs:
+        ax.legend(*zip(*visible_pairs), loc='upper left', fontsize='small')
+      else:
+        ax.legend(loc='upper left', fontsize='small')
+
       ax.grid(True, alpha=0.3)
       ax.tick_params(axis='x', rotation=45)
       fig.canvas.draw_idle()
