@@ -10,10 +10,12 @@ from matplotlib.widgets import Button
 class TradingBot:
 
   def __init__(self, tickers, short_window, long_window, sma_windows=None):
-    self.tickers = tickers # ticker : stock'slabel
+    self.tickers = tickers # ticker : stock's label
     self.short_window = short_window
     self.long_window = long_window
-    self.sma_windows = sma_windows if sma_windows else [short_window, long_window]
+    # 确保 short/long 一定包含在列表里，并去重
+    base = sma_windows or [short_window, long_window]
+    self.sma_windows = sorted(set(base + [short_window, long_window]))
     self.positions = {ticker: 0 for ticker in self.tickers}
 
   def get_data(self, ticker):
@@ -172,7 +174,10 @@ class TradingBot:
     plt.subplots_adjust(bottom=0.2)
 
     # Track which SMA windows are visible
-    sma_visible = {window: True for window in self.sma_windows}
+    # sma_visible = {window: True for window in self.sma_windows}
+    # 仅 short_window 和 long_window 默认可见
+    sma_visible = {w: (w in (self.short_window, self.long_window)) for w in self.sma_windows}
+
 
     # 固定你自己的颜色顺序（不经由 rcParams）
     base_colors = [
@@ -212,7 +217,7 @@ class TradingBot:
         return
       (company_name, df) = res
 
-      # 固定收盘线颜色
+      # 收盘线
       close_line, = ax.plot(df['Close'], label='Close Price', alpha=0.5, linewidth=2.0, color='tab:blue')
 
       # 先把所有 SMA 都画出来，并赋予固定颜色，再按可见性显示/隐藏
@@ -264,7 +269,9 @@ class TradingBot:
     for i, window in enumerate(self.sma_windows):
       ax_button = plt.axes([0.10 + i*0.12, 0.02, 0.10, 0.05])
       button_axes.append(ax_button)
-      btn = Button(ax_button, f'SMA {window}')
+      # 按照可见性设定初始标签
+      init_label = f"SMA {window}" + ("" if sma_visible[window] else " (off)")
+      btn = Button(ax_button, init_label)
       toggle_buttons.append(btn)
       def make_toggle(button, win):
         def toggle(event,b=button, w=win):
