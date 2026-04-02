@@ -23,7 +23,7 @@ class TradingBot:
     try:
       stock = yf.Ticker(ticker)
       info = stock.info
-      hist = stock.history(period="12mo", interval="1d")
+      hist = stock.history(period="729d", interval="1d")
     except Exception as e:
       print(f"Error fetching data for {ticker}: {e}")
       return None
@@ -338,7 +338,7 @@ if __name__ == "__main__":
                'NL0014559478', #Technip Energies N.V. XPAR TE
                'FR0000120271' # TotalEnergies SE, XPAR TTE
               ]
-  bot = TradingBot(tickers=WATCHLIST, short_window=20, long_window=100, sma_windows=[10, 20, 50, 100, 200])
+  bot = TradingBot(tickers=WATCHLIST, short_window=50, long_window=200, sma_windows=[10, 20, 50, 100, 200])
 
   # Uncomment to run the bot
   # bot.run()
