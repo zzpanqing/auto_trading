@@ -117,8 +117,15 @@ class TradingBot:
         win_colors = {w: SMA_COLORS[i % len(SMA_COLORS)]
                       for i, w in enumerate(self.sma_windows)}
 
-        # ── Ticker 标签（先用 ticker 本身，加载后更新）──────────────
-        ticker_labels = {t: t for t in self.tickers}
+        # ── 预先加载所有 ticker 名称 ─────────────────────────────────
+        # 避免 draw() 里更新 dropdown.options 触发额外事件
+        print("⏳ 预加载公司名称...")
+        ticker_labels = {}
+        for t in self.tickers:
+            res = self._get_computed_df(t)
+            ticker_labels[t] = f"{res[0]} ({t})" if res else t
+            print(f"  ✅ {ticker_labels[t]}")
+        print("✅ 加载完成，启动界面...\n")
 
         # ── 导航 Widgets ─────────────────────────────────────────────
         btn_prev = widgets.Button(
@@ -129,14 +136,15 @@ class TradingBot:
             description='Next  ▶',
             layout=widgets.Layout(width='100px', height='34px'),
         )
+        # ✅ dropdown 一开始就用完整的公司名，之后不再更新 options
         dropdown = widgets.Dropdown(
-            options=[(t, t) for t in self.tickers],
+            options=[(ticker_labels[t], t) for t in self.tickers],
             value=self.tickers[0],
             layout=widgets.Layout(width='360px'),
         )
-        status_label = widgets.Label(value='⏳ 加载中...')
+        status_label = widgets.Label(value='')
 
-        # ── SMA ToggleButtons（横向，每个 SMA 一个按钮）─────────────
+        # ── SMA ToggleButtons（横向）────────────────────────────────
         sma_buttons = []
         for w in self.sma_windows:
             is_default = w in [self.short_window, self.long_window]
@@ -148,7 +156,9 @@ class TradingBot:
             sma_buttons.append(btn)
 
         out = widgets.Output()
-        idx = {'i': 0}
+
+        # ✅ 用字典做锁，防止事件连锁触发
+        state = {'idx': 0, 'updating': False}
 
         # ── 布局 ────────────────────────────────────────────────────
         nav_row = widgets.HBox(
@@ -161,7 +171,7 @@ class TradingBot:
             layout=widgets.Layout(align_items='center', gap='4px', margin='0 0 8px 0'),
         )
 
-        # ✅ 先显示界面，再画图
+        # ✅ 先显示界面
         display(nav_row, sma_row, out)
 
         # ── 获取当前选中的 SMA 列表 ──────────────────────────────────
@@ -170,21 +180,16 @@ class TradingBot:
 
         # ── 绘图函数 ─────────────────────────────────────────────────
         def draw(ticker, visible_smas):
-            status_label.value = f'⏳ 加载 {ticker} ...'
+            status_label.value = f'⏳ {ticker_labels.get(ticker, ticker)}'
             res = self._get_computed_df(ticker)
             if res is None:
                 with out:
                     clear_output(wait=True)
                     print(f"❌ 无法获取 {ticker} 的数据")
-                status_label.value = '❌ 数据获取失败'
+                status_label.value = '❌ 失败'
                 return
 
             company_name, df = res
-
-            # 更新 dropdown 显示公司名
-            ticker_labels[ticker] = f"{company_name} ({ticker})"
-            dropdown.options = [(ticker_labels[t], t) for t in self.tickers]
-            dropdown.value = ticker
 
             fig = go.Figure()
 
@@ -246,24 +251,42 @@ class TradingBot:
 
         # ── 事件处理 ─────────────────────────────────────────────────
         def on_prev(_):
-            idx['i'] = (idx['i'] - 1) % len(self.tickers)
-            dropdown.value = self.tickers[idx['i']]
+            if state['updating']:
+                return
+            state['updating'] = True
+            state['idx'] = (state['idx'] - 1) % len(self.tickers)
+            ticker = self.tickers[state['idx']]
+            # ✅ 直接设置 value，不更新 options，避免触发额外事件
+            dropdown.value = ticker
+            draw(ticker, get_visible_smas())
+            state['updating'] = False
 
         def on_next(_):
-            idx['i'] = (idx['i'] + 1) % len(self.tickers)
-            dropdown.value = self.tickers[idx['i']]
+            if state['updating']:
+                return
+            state['updating'] = True
+            state['idx'] = (state['idx'] + 1) % len(self.tickers)
+            ticker = self.tickers[state['idx']]
+            dropdown.value = ticker
+            draw(ticker, get_visible_smas())
+            state['updating'] = False
 
         def on_dropdown_change(change):
+            if state['updating']:
+                return
             if change['type'] == 'change' and change['name'] == 'value':
+                state['updating'] = True
                 ticker = change['new']
-                idx['i'] = self.tickers.index(ticker)
+                state['idx'] = self.tickers.index(ticker)
                 draw(ticker, get_visible_smas())
+                state['updating'] = False
 
-        # 每个 SMA 按钮绑定事件
         def make_sma_handler(w):
             def handler(change):
+                if state['updating']:
+                    return
                 if change['name'] == 'value':
-                    draw(self.tickers[idx['i']], get_visible_smas())
+                    draw(self.tickers[state['idx']], get_visible_smas())
             return handler
 
         btn_prev.on_click(on_prev)
@@ -272,7 +295,7 @@ class TradingBot:
         for w, btn in zip(self.sma_windows, sma_buttons):
             btn.observe(make_sma_handler(w))
 
-        # ✅ 最后才画图
+        # ✅ 最后画图（数据已在预加载时缓存，直接从缓存读取）
         draw(self.tickers[0], get_visible_smas())
 
 
