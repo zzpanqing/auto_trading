@@ -1,3 +1,6 @@
+from google.colab import output
+output.enable_custom_widget_manager()
+
 import yfinance as yf
 import time
 from datetime import datetime
@@ -114,13 +117,10 @@ class TradingBot:
         win_colors = {w: SMA_COLORS[i % len(SMA_COLORS)]
                       for i, w in enumerate(self.sma_windows)}
 
-        # ── 预加载第一个 ticker 的标签 ───────────────────────────────
-        # 其余 ticker 标签在首次点击时加载（避免启动太慢）
-        ticker_labels = {}
-        for t in self.tickers:
-            ticker_labels[t] = t  # 先用 ticker 本身作为临时标签
+        # ── Ticker 标签（先用 ticker 本身，加载后更新）──────────────
+        ticker_labels = {t: t for t in self.tickers}
 
-        # ── Widgets ─────────────────────────────────────────────────
+        # ── 导航 Widgets ─────────────────────────────────────────────
         btn_prev = widgets.Button(
             description='◀  Prev',
             layout=widgets.Layout(width='100px', height='34px'),
@@ -134,36 +134,43 @@ class TradingBot:
             value=self.tickers[0],
             layout=widgets.Layout(width='360px'),
         )
-        sma_toggle = widgets.SelectMultiple(
-            options=self.sma_windows,
-            value=[self.short_window, self.long_window],
-            description='SMA:',
-            layout=widgets.Layout(width='200px', height=f'{28 * len(self.sma_windows) + 8}px'),
-        )
         status_label = widgets.Label(value='⏳ 加载中...')
-        out = widgets.Output()
 
+        # ── SMA ToggleButtons（横向，每个 SMA 一个按钮）─────────────
+        sma_buttons = []
+        for w in self.sma_windows:
+            is_default = w in [self.short_window, self.long_window]
+            btn = widgets.ToggleButton(
+                value=is_default,
+                description=f'SMA {w}',
+                layout=widgets.Layout(width='75px', height='28px'),
+            )
+            sma_buttons.append(btn)
+
+        out = widgets.Output()
         idx = {'i': 0}
 
-        # ── 布局（先 display，再 draw）───────────────────────────────
+        # ── 布局 ────────────────────────────────────────────────────
         nav_row = widgets.HBox(
             [btn_prev, dropdown, btn_next, status_label],
-            layout=widgets.Layout(align_items='center', gap='8px', margin='0 0 8px 0'),
+            layout=widgets.Layout(align_items='center', gap='6px', margin='0 0 6px 0'),
         )
-        sma_label = widgets.HTML('<b style="font-size:13px">显示 SMA 均线：</b>')
+        sma_label = widgets.HTML('<b style="font-size:13px">显示 SMA：</b>')
         sma_row = widgets.HBox(
-            [sma_label, sma_toggle],
-            layout=widgets.Layout(align_items='flex-start', margin='0 0 10px 0'),
+            [sma_label] + sma_buttons,
+            layout=widgets.Layout(align_items='center', gap='4px', margin='0 0 8px 0'),
         )
 
         # ✅ 先显示界面，再画图
         display(nav_row, sma_row, out)
 
-        # ── 绘图函数 ────────────────────────────────────────────────
+        # ── 获取当前选中的 SMA 列表 ──────────────────────────────────
+        def get_visible_smas():
+            return [w for w, btn in zip(self.sma_windows, sma_buttons) if btn.value]
+
+        # ── 绘图函数 ─────────────────────────────────────────────────
         def draw(ticker, visible_smas):
             status_label.value = f'⏳ 加载 {ticker} ...'
-
-            # ✅ 用 self 而不是 bot
             res = self._get_computed_df(ticker)
             if res is None:
                 with out:
@@ -174,10 +181,10 @@ class TradingBot:
 
             company_name, df = res
 
-            # 更新 dropdown 标签
+            # 更新 dropdown 显示公司名
             ticker_labels[ticker] = f"{company_name} ({ticker})"
             dropdown.options = [(ticker_labels[t], t) for t in self.tickers]
-            dropdown.value = ticker  # 保持选中
+            dropdown.value = ticker
 
             fig = go.Figure()
 
@@ -189,7 +196,7 @@ class TradingBot:
                 opacity=0.7,
             ))
 
-            # ✅ 用 self 而不是 bot
+            # SMA 曲线
             for w in self.sma_windows:
                 fig.add_trace(go.Scatter(
                     x=df.index, y=df[f'SMA_{w}'],
@@ -201,8 +208,6 @@ class TradingBot:
             # Buy / Sell markers
             buy_mask  = df['Position'] == 1.0
             sell_mask = df['Position'] == -1.0
-
-            # ✅ 用 self 而不是 bot
             fig.add_trace(go.Scatter(
                 x=df[buy_mask].index,
                 y=df[f'SMA_{self.short_window}'][buy_mask],
@@ -218,7 +223,6 @@ class TradingBot:
                             line=dict(color='white', width=1)),
             ))
 
-            # ✅ 用 self 而不是 bot
             current_signal = self.analyze_market(ticker, df.copy())
             signal_emoji = {'BUY': '🟢 BUY', 'SELL': '🔴 SELL', 'HOLD': '🟡 HOLD'}[current_signal]
             current_price = df['Close'].iloc[-1]
@@ -234,14 +238,13 @@ class TradingBot:
                 margin=dict(l=50, r=30, t=70, b=50),
             )
 
-            # ✅ display(fig) 而不是 fig.show()
             with out:
                 clear_output(wait=True)
                 display(fig)
 
             status_label.value = f'✅ {company_name}'
 
-        # ── 事件处理（只绑定一次）───────────────────────────────────
+        # ── 事件处理 ─────────────────────────────────────────────────
         def on_prev(_):
             idx['i'] = (idx['i'] - 1) % len(self.tickers)
             dropdown.value = self.tickers[idx['i']]
@@ -254,19 +257,23 @@ class TradingBot:
             if change['type'] == 'change' and change['name'] == 'value':
                 ticker = change['new']
                 idx['i'] = self.tickers.index(ticker)
-                draw(ticker, list(sma_toggle.value))
+                draw(ticker, get_visible_smas())
 
-        def on_sma_change(change):
-            if change['type'] == 'change' and change['name'] == 'value':
-                draw(self.tickers[idx['i']], list(change['new']))
+        # 每个 SMA 按钮绑定事件
+        def make_sma_handler(w):
+            def handler(change):
+                if change['name'] == 'value':
+                    draw(self.tickers[idx['i']], get_visible_smas())
+            return handler
 
         btn_prev.on_click(on_prev)
         btn_next.on_click(on_next)
         dropdown.observe(on_dropdown_change)
-        sma_toggle.observe(on_sma_change)
+        for w, btn in zip(self.sma_windows, sma_buttons):
+            btn.observe(make_sma_handler(w))
 
-        # ✅ 最后才画图（界面已经显示了）
-        draw(self.tickers[0], list(sma_toggle.value))
+        # ✅ 最后才画图
+        draw(self.tickers[0], get_visible_smas())
 
 
 # ════════════════════════════════════════════════════════════════════
