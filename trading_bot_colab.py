@@ -282,13 +282,6 @@ class TradingBot:
             ],
         )
 
-        # 使用说明
-        print("💡 使用说明：")
-        print("   • 下拉菜单选择股票")
-        print("   • 点击图例中的 SMA 条目可显示/隐藏对应曲线")
-        print("   • 双击图例条目可单独显示该曲线")
-        print("   • 图表支持鼠标缩放和拖动\n")
-
         display(fig)
 
 
