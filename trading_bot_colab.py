@@ -127,14 +127,13 @@ class TradingBot:
                 print(f"  ❌ {t} 数据获取失败")
         print("✅ 完成，正在绘图...\n")
 
-        # ── 每个 ticker 有多少条 trace ───────────────────────────────
-        # 结构：Close(1) + SMA×N + Buy(1) + Sell(1)
+        # 每个 ticker 的 trace 数量：Close + SMAs + Buy + Sell
         N_SMA    = len(self.sma_windows)
-        N_TRACES = 1 + N_SMA + 2  # Close + SMAs + Buy + Sell
+        N_TRACES = 1 + N_SMA + 2
 
         # ── 构建图表 ─────────────────────────────────────────────────
         fig = go.Figure()
-        traces_info = []  # (start_idx, company_name, ticker, signal_emoji, price)
+        traces_info = []
 
         for ticker_idx, (ticker, company_name, df) in enumerate(res_list):
             is_first = (ticker_idx == 0)
@@ -151,7 +150,7 @@ class TradingBot:
                 visible=is_first,
                 line=dict(color='#5B8DB8', width=2),
                 opacity=0.7,
-                legendgroup=str(ticker_idx),
+                legendgroup='close',
                 showlegend=is_first,
             ))
 
@@ -167,7 +166,7 @@ class TradingBot:
                     name=f'SMA {w}',
                     visible=vis,
                     line=dict(color=win_colors[w], width=1.5),
-                    legendgroup=str(ticker_idx),
+                    legendgroup=f'sma{w}',
                     showlegend=is_first,
                 ))
 
@@ -180,7 +179,7 @@ class TradingBot:
                 visible=is_first,
                 marker=dict(symbol='triangle-up', size=12, color='#2DC653',
                             line=dict(color='white', width=1)),
-                legendgroup=str(ticker_idx),
+                legendgroup='buy',
                 showlegend=is_first,
             ))
 
@@ -193,7 +192,7 @@ class TradingBot:
                 visible=is_first,
                 marker=dict(symbol='triangle-down', size=12, color='#E63946',
                             line=dict(color='white', width=1)),
-                legendgroup=str(ticker_idx),
+                legendgroup='sell',
                 showlegend=is_first,
             ))
 
@@ -201,60 +200,49 @@ class TradingBot:
 
         total_traces = len(fig.data)
 
-        # ── 辅助：构建某个 ticker 的 visibility 数组 ─────────────────
-        def make_visibility(active_idx, sma_defaults=None):
-            """
-            active_idx  : 显示哪个 ticker
-            sma_defaults: 哪些 SMA 默认显示（None = 用 short/long）
-            """
-            if sma_defaults is None:
-                sma_defaults = [self.short_window, self.long_window]
-            vis = []
-            for i, (start, _, _, _, _) in enumerate(traces_info):
-                if i == active_idx:
-                    # Close
-                    vis.append(True)
-                    # SMAs
-                    for w in self.sma_windows:
-                        vis.append(w in sma_defaults)
-                    # Buy / Sell
-                    vis.append(True)
-                    vis.append(True)
-                else:
-                    vis.extend([False] * N_TRACES)
-            return vis
-
-        # ── Ticker 切换按钮 ──────────────────────────────────────────
+        # ── 构建 ticker 切换按钮 ─────────────────────────────────────
+        # 每个按钮切换时：
+        #   - 只显示当前 ticker 的 traces
+        #   - SMA 默认显示 short/long，其余 legendonly
+        #   - 更新图例只显示当前 ticker 的条目
+        #   - 更新标题
         ticker_buttons = []
         for i, (start, company_name, ticker, signal_emoji, price) in enumerate(traces_info):
+
+            # 构建 visibility 数组
+            vis = []
+            showlegend = []
+            for j, (s, _, _, _, _) in enumerate(traces_info):
+                if j == i:
+                    # Close
+                    vis.append(True)
+                    showlegend.append(True)
+                    # SMAs
+                    for w in self.sma_windows:
+                        is_default = w in [self.short_window, self.long_window]
+                        vis.append(True if is_default else 'legendonly')
+                        showlegend.append(True)
+                    # Buy / Sell
+                    vis.append(True)
+                    showlegend.append(True)
+                    vis.append(True)
+                    showlegend.append(True)
+                else:
+                    # 其他 ticker 全隐藏，图例也隐藏
+                    vis.extend([False] * N_TRACES)
+                    showlegend.extend([False] * N_TRACES)
+
             ticker_buttons.append(dict(
                 label=company_name,
                 method='update',
                 args=[
                     {
-                        'visible': make_visibility(i),
-                        'showlegend': [j // N_TRACES == i for j in range(total_traces)],
+                        'visible': vis,
+                        'showlegend': showlegend,
                     },
                     {
                         'title': f'<b>{company_name}</b>  |  €{price:.2f}  |  {signal_emoji}',
                     },
-                ],
-            ))
-
-        # ── SMA 개별 toggle 按钮 ─────────────────────────────────────
-        # 注：Plotly 原生按钮切换 SMA 只对当前显示的 ticker 生效
-        # 这里用 restyle 切换单条 trace 的 visible
-        sma_buttons = []
-        for sma_idx, w in enumerate(self.sma_windows):
-            sma_buttons.append(dict(
-                label=f'SMA {w}',
-                method='restyle',
-                # trace index 在当前 ticker 里是 1+sma_idx（Close 是第0条）
-                # 但因为所有 ticker 都堆在一起，需要对所有 ticker 同时操作
-                args=[
-                    {'visible': 'toggle'},
-                    # 所有 ticker 里这条 SMA 的 trace 下标
-                    [i * N_TRACES + 1 + sma_idx for i in range(len(traces_info))],
                 ],
             ))
 
@@ -264,44 +252,41 @@ class TradingBot:
 
         fig.update_layout(
             title=init_title,
-            height=600,
+            height=580,
             template='plotly_white',
             hovermode='x unified',
             xaxis_title='Date',
             yaxis_title='Price (€)',
+            # ✅ 图例横排在图表上方，点击可显示/隐藏 SMA
             legend=dict(
                 orientation='h',
-                yanchor='bottom', y=1.18,
+                yanchor='bottom', y=1.10,
                 xanchor='right', x=1,
+                itemclick='toggle',        # 单击切换
+                itemdoubleclick='toggleothers',  # 双击只显示这条
             ),
-            margin=dict(l=50, r=30, t=160, b=50),
-
+            margin=dict(l=50, r=30, t=140, b=50),
             updatemenus=[
-                # ── 菜单 1：Ticker 选择（下拉）────────────────────────
                 dict(
                     type='dropdown',
                     direction='down',
                     buttons=ticker_buttons,
                     x=0, xanchor='left',
-                    y=1.18, yanchor='top',
+                    y=1.22, yanchor='top',
                     showactive=True,
                     bgcolor='white',
-                    bordercolor='#cccccc',
-                ),
-                # ── 菜单 2：SMA 开关（横排按钮）──────────────────────
-                dict(
-                    type='buttons',
-                    direction='left',
-                    buttons=sma_buttons,
-                    x=0, xanchor='left',
-                    y=1.08, yanchor='top',
-                    showactive=True,
-                    bgcolor='#f0f0f0',
-                    activecolor='#4A90D9',
-                    bordercolor='#cccccc',
+                    bordercolor='#aaaaaa',
+                    font=dict(size=13),
                 ),
             ],
         )
+
+        # 使用说明
+        print("💡 使用说明：")
+        print("   • 下拉菜单选择股票")
+        print("   • 点击图例中的 SMA 条目可显示/隐藏对应曲线")
+        print("   • 双击图例条目可单独显示该曲线")
+        print("   • 图表支持鼠标缩放和拖动\n")
 
         display(fig)
 
