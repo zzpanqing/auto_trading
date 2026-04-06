@@ -1,3 +1,4 @@
+#v8
 from google.colab import output
 output.enable_custom_widget_manager()
 
@@ -116,13 +117,13 @@ class TradingBot:
                       for i, w in enumerate(self.sma_windows)}
 
         # ── 预加载所有数据 ───────────────────────────────────────────
-        print("⏳ 预加载数据...")
+        #print("⏳ 预加载数据...")
         res_list = []
         for t in self.tickers:
             res = self._get_computed_df(t)
             if res:
                 res_list.append((t, res[0], res[1]))
-                print(f"  ✅ {res[0]} ({t})")
+                #print(f"  ✅ {res[0]} ({t})")
             else:
                 print(f"  ❌ {t} 数据获取失败")
         print("✅ 完成，正在绘图...\n")
@@ -272,7 +273,7 @@ class TradingBot:
                     direction='down',
                     buttons=ticker_buttons,
                     x=0, xanchor='left',
-                    y=1.22, yanchor='top',
+                    y=1.35, yanchor='top',
                     showactive=True,
                     bgcolor='white',
                     bordercolor='#aaaaaa',
