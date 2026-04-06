@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import ipywidgets as widgets
-from IPython.display import display
+from IPython.display import display, clear_output
 
 
 class TradingBot:
@@ -151,17 +151,12 @@ class TradingBot:
             )
             sma_buttons.append(btn)
 
-        # ── FigureWidget：图表本身就是一个 widget ────────────────────
-        # 初始化空图，之后只更新数据，不重建整个图表
-        fw = go.FigureWidget()
-        fw.update_layout(
-            height=520,
-            template='plotly_white',
-            hovermode='x unified',
-            xaxis_title='Date',
-            yaxis_title='Price (€)',
-            legend=dict(orientation='h', yanchor='bottom', y=1.01, xanchor='right', x=1),
-            margin=dict(l=50, r=30, t=70, b=50),
+        # ── Output 容器：固定尺寸，防止缩小 ─────────────────────────
+        out = widgets.Output(
+            layout=widgets.Layout(
+                width='100%',
+                min_height='540px',   # ✅ 固定最小高度，防止缩小
+            )
         )
 
         state = {'idx': 0, 'updating': False}
@@ -177,70 +172,77 @@ class TradingBot:
             layout=widgets.Layout(align_items='center', gap='4px', margin='0 0 8px 0'),
         )
 
-        # ✅ fw 直接放进布局，不用 Output()
-        display(nav_row, sma_row, fw)
+        display(nav_row, sma_row, out)
 
         def get_visible_smas():
             return [w for w, btn in zip(self.sma_windows, sma_buttons) if btn.value]
 
-        # ── 绘图：用 batch_update 直接修改 FigureWidget ──────────────
-        def draw(ticker, visible_smas):
-            status_label.value = f'⏳ {ticker_labels.get(ticker, ticker)}'
+        # ── 绘图函数 ─────────────────────────────────────────────────
+        def make_fig(ticker, visible_smas):
+            """构建一个新的 go.Figure（不是 FigureWidget）"""
             res = self._get_computed_df(ticker)
             if res is None:
-                status_label.value = '❌ 数据获取失败'
-                return
-
+                return None, None
             company_name, df = res
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=df.index, y=df['Close'],
+                name='Close Price',
+                line=dict(color='#5B8DB8', width=2),
+                opacity=0.7,
+            ))
+            for w in self.sma_windows:
+                fig.add_trace(go.Scatter(
+                    x=df.index, y=df[f'SMA_{w}'],
+                    name=f'SMA {w}',
+                    line=dict(color=win_colors[w], width=1.5),
+                    visible=True if w in visible_smas else 'legendonly',
+                ))
+
             buy_mask  = df['Position'] == 1.0
             sell_mask = df['Position'] == -1.0
+            fig.add_trace(go.Scatter(
+                x=df[buy_mask].index,
+                y=df[f'SMA_{self.short_window}'][buy_mask],
+                mode='markers', name='Buy Signal',
+                marker=dict(symbol='triangle-up', size=12, color='#2DC653',
+                            line=dict(color='white', width=1)),
+            ))
+            fig.add_trace(go.Scatter(
+                x=df[sell_mask].index,
+                y=df[f'SMA_{self.short_window}'][sell_mask],
+                mode='markers', name='Sell Signal',
+                marker=dict(symbol='triangle-down', size=12, color='#E63946',
+                            line=dict(color='white', width=1)),
+            ))
 
             current_signal = self.analyze_market(ticker, df.copy())
             signal_emoji = {'BUY': '🟢 BUY', 'SELL': '🔴 SELL', 'HOLD': '🟡 HOLD'}[current_signal]
             current_price = df['Close'].iloc[-1]
 
-            # ✅ batch_update：所有修改一次性提交，不触发多次重渲染
-            with fw.batch_update():
-                # 清空所有 trace，重新添加
-                fw.data = []
+            fig.update_layout(
+                title=f"<b>{company_name}</b>  |  €{current_price:.2f}  |  {signal_emoji}",
+                xaxis_title='Date',
+                yaxis_title='Price (€)',
+                hovermode='x unified',
+                height=520,
+                template='plotly_white',
+                legend=dict(orientation='h', yanchor='bottom', y=1.01, xanchor='right', x=1),
+                margin=dict(l=50, r=30, t=70, b=50),
+            )
+            return fig, company_name
 
-                # 收盘价
-                fw.add_trace(go.Scatter(
-                    x=df.index, y=df['Close'],
-                    name='Close Price',
-                    line=dict(color='#5B8DB8', width=2),
-                    opacity=0.7,
-                ))
-
-                # SMA 曲线
-                for w in self.sma_windows:
-                    fw.add_trace(go.Scatter(
-                        x=df.index, y=df[f'SMA_{w}'],
-                        name=f'SMA {w}',
-                        line=dict(color=win_colors[w], width=1.5),
-                        visible=True if w in visible_smas else 'legendonly',
-                    ))
-
-                # Buy / Sell markers
-                fw.add_trace(go.Scatter(
-                    x=df[buy_mask].index,
-                    y=df[f'SMA_{self.short_window}'][buy_mask],
-                    mode='markers', name='Buy Signal',
-                    marker=dict(symbol='triangle-up', size=12, color='#2DC653',
-                                line=dict(color='white', width=1)),
-                ))
-                fw.add_trace(go.Scatter(
-                    x=df[sell_mask].index,
-                    y=df[f'SMA_{self.short_window}'][sell_mask],
-                    mode='markers', name='Sell Signal',
-                    marker=dict(symbol='triangle-down', size=12, color='#E63946',
-                                line=dict(color='white', width=1)),
-                ))
-
-                fw.update_layout(
-                    title=f"<b>{company_name}</b>  |  €{current_price:.2f}  |  {signal_emoji}",
-                )
-
+        def draw(ticker, visible_smas):
+            status_label.value = f'⏳ {ticker_labels.get(ticker, ticker)}'
+            fig, company_name = make_fig(ticker, visible_smas)
+            if fig is None:
+                status_label.value = '❌ 数据获取失败'
+                return
+            # ✅ clear_output + display 但 out 有固定 min_height，不会缩小
+            with out:
+                clear_output(wait=True)
+                display(fig)
             status_label.value = f'✅ {company_name}'
 
         # ── 事件处理 ──────────────────────────────────────────────────
