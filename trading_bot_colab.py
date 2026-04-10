@@ -232,7 +232,8 @@ class TradingBot:
                     # 其他 ticker 全隐藏，图例也隐藏
                     vis.extend([False] * N_TRACES)
                     showlegend.extend([False] * N_TRACES)
-
+            if(len(company_name) > 20):
+                company_name = company_name[:17] + '...'
             ticker_buttons.append(dict(
                 label=company_name,
                 method='update',
