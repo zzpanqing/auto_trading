@@ -341,7 +341,10 @@ if __name__ == "__main__":
                'FR0000120321', #L'Oréal, XPAR EL
                'FR0000120578', #Sanofi, XPAR OR
                'NL0014559478', #Technip Energies N.V. XPAR TE
-               'FR0000120271' # TotalEnergies SE, XPAR TTE
+               'FR0000120271', # TotalEnergies SE, XPAR TTE
+               'FR001400AJ45',   # MICHELIN
+               'FR0000121709',   # SEB
+               'FR0000075954'    # RIBER
               ]
   bot = TradingBot(tickers=WATCHLIST, short_window=10, long_window=50, sma_windows=[5, 10, 20, 25, 50, 100, 200])
   # ✔ “短周期 vs 长周期”的关系

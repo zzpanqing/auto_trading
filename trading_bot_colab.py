@@ -110,8 +110,8 @@ class TradingBot:
     def visualize_colab(self):
 
         SMA_COLORS = [
-            '#F4A261', '#2A9D8F', '#E76F51', '#9B5DE5',
-            '#A8DADC', '#F72585', '#4CC9F0', '#06D6A0',
+            '#F4A261', "#170B5C", '#E76F51', '#9B5DE5',
+            '#A8DADC', '#F72585', '#4CC9F0', "#89BF14",
         ]
         win_colors = {w: SMA_COLORS[i % len(SMA_COLORS)]
                       for i, w in enumerate(self.sma_windows)}
@@ -298,6 +298,9 @@ WATCHLIST = [
     'FR0000120578',   # Sanofi
     'NL0014559478',   # Technip Energies
     'FR0000120271',   # TotalEnergies
+    'FR001400AJ45',   # MICHELIN
+    'FR0000121709',   # SEB
+    'FR0000075954'    # RIBER
 ]
 
 bot = TradingBot(
