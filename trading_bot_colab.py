@@ -155,7 +155,7 @@ class TradingBot:
         fig = go.Figure()
         traces_info = []
 
-        for ticker_idx, (ticker, company_name, df, q_dates, a_dates) in enumerate(res_list):
+        for ticker_idx, (ticker, company_name, df) in enumerate(res_list):
             is_first = (ticker_idx == 0)
             start = len(fig.data)
 
@@ -216,32 +216,6 @@ class TradingBot:
                 showlegend=is_first,
             ))
 
-            # 季度财报标记（向下三角，橙色）
-            q_prices = df['Close'].reindex(q_dates) if q_dates else pd.Series(dtype=float)
-            fig.add_trace(go.Scatter(
-                x=q_prices.index, y=q_prices.values,
-                mode='markers', name='季度财报',
-                visible=is_first,
-                marker=dict(symbol='triangle-down', size=14, color='#FF8C00',
-                            line=dict(color='white', width=1)),
-                legendgroup='q_earnings',
-                showlegend=is_first,
-                hovertemplate='季度财报<br>%{x|%Y-%m-%d}<br>€%{y:.2f}<extra></extra>',
-            ))
-
-            # 年度财报标记（向下三角，紫色，更大）
-            a_prices = df['Close'].reindex(a_dates) if a_dates else pd.Series(dtype=float)
-            fig.add_trace(go.Scatter(
-                x=a_prices.index, y=a_prices.values,
-                mode='markers', name='年度财报',
-                visible=is_first,
-                marker=dict(symbol='triangle-down', size=18, color='#9B59B6',
-                            line=dict(color='white', width=1.5)),
-                legendgroup='a_earnings',
-                showlegend=is_first,
-                hovertemplate='年度财报<br>%{x|%Y-%m-%d}<br>€%{y:.2f}<extra></extra>',
-            ))
-
             traces_info.append((start, company_name, ticker, signal_emoji, current_price))
 
         total_traces = len(fig.data)
@@ -269,11 +243,6 @@ class TradingBot:
                         vis.append(True if is_default else 'legendonly')
                         showlegend.append(True)
                     # Buy / Sell
-                    vis.append(True)
-                    showlegend.append(True)
-                    vis.append(True)
-                    showlegend.append(True)
-                    # 季度财报 / 年度财报
                     vis.append(True)
                     showlegend.append(True)
                     vis.append(True)
