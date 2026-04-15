@@ -122,34 +122,15 @@ class TradingBot:
         for t in self.tickers:
             res = self._get_computed_df(t)
             if res:
-                company_name, df = res[0], res[1]
-
-                # 获取历史财报日期
-                q_dates, a_dates = [], []
-                try:
-                    stock = yf.Ticker(t)
-                    df_idx = df.index.normalize()
-
-                    qe = stock.quarterly_earnings
-                    if qe is not None and not qe.empty:
-                        dates = pd.to_datetime(qe.index).normalize()
-                        q_dates = [d for d in dates if d in df_idx]
-
-                    ae = stock.earnings
-                    if ae is not None and not ae.empty:
-                        dates = pd.to_datetime(ae.index).normalize()
-                        a_dates = [d for d in dates if d in df_idx]
-                except Exception:
-                    pass
-
-                res_list.append((t, company_name, df, q_dates, a_dates))
+                res_list.append((t, res[0], res[1]))
+                #print(f"  ✅ {res[0]} ({t})")
             else:
                 print(f"  ❌ {t} 数据获取失败")
         print("✅ 完成，正在绘图...\n")
 
-        # 每个 ticker 的 trace 数量：Close + SMAs + Buy + Sell + 季度财报 + 年度财报
+        # 每个 ticker 的 trace 数量：Close + SMAs + Buy + Sell
         N_SMA    = len(self.sma_windows)
-        N_TRACES = 1 + N_SMA + 2 + 2
+        N_TRACES = 1 + N_SMA + 2
 
         # ── 构建图表 ─────────────────────────────────────────────────
         fig = go.Figure()
